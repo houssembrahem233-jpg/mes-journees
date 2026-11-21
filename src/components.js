@@ -1,19 +1,11 @@
 // Éléments réutilisés par tous les écrans
 import React from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
+import { View, Text, Pressable, Modal, StyleSheet, TextInput, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from './theme';
 import { longLabel, addDaysKey, todayKey } from './dates';
+import { useKeyboardOverlap } from './keyboard';
 
 // Bandeau coloré en haut de chaque écran
 export function Header({ title, subtitle, color, light, right, children }) {
@@ -115,25 +107,26 @@ export function Empty({ text }) {
 }
 
 // Fenêtre qui monte du bas de l'écran (pour ajouter / modifier)
+// Quand le clavier s'ouvre, la fenêtre remonte au-dessus de lui.
 export function Sheet({ visible, onClose, title, children }) {
   const insets = useSafeAreaInsets();
+  const kb = useKeyboardOverlap();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <View ref={kb.ref} collapsable={false} style={{ flex: 1 }}>
         <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Fermer" />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + 20 }]}>
+        <View style={[s.sheet, { paddingBottom: kb.overlap > 0 ? kb.overlap + 12 : insets.bottom + 20 }]}>
           <View style={s.sheetHead}>
             <Text style={s.sheetTitle}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Fermer">
               <Ionicons name="close" size={26} color={C.muted} />
             </Pressable>
           </View>
-          {children}
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 16 }} style={{ flexGrow: 0 }}>
+            {children}
+          </ScrollView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -238,6 +231,7 @@ export const s = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
     gap: 16,
+    maxHeight: '92%',
   },
   sheetHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sheetTitle: { fontSize: 20, fontWeight: '800', color: C.ink },

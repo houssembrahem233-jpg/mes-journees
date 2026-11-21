@@ -1,13 +1,26 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Alert, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, TAGS } from '../theme';
 import { longLabel, occursOn, uid } from '../dates';
 import { Header, SectionTitle, Checkbox, Chip, Empty } from '../components';
+import { useOnKeyboardShow } from '../keyboard';
 
 export default function TodayScreen({ data, update, today, goTo }) {
   const [text, setText] = useState('');
   const [tag, setTag] = useState('Perso');
+  const scrollRef = useRef(null);
+  const addY = useRef(0);
+  const typing = useRef(false);
+
+  // Fait défiler l'écran pour que le champ de saisie reste visible au-dessus du clavier
+  const showInput = () => {
+    if (!typing.current || !scrollRef.current) return;
+    setTimeout(() => {
+      if (scrollRef.current) scrollRef.current.scrollTo({ y: Math.max(0, addY.current - 120), animated: true });
+    }, 150);
+  };
+  useOnKeyboardShow(showInput);
 
   const tasks = data.daily[today] || [];
   const done = tasks.filter((t) => t.done).length;
@@ -95,7 +108,7 @@ export default function TodayScreen({ data, update, today, goTo }) {
         </View>
       </Header>
 
-      <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         {/* Prières du jour */}
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <View style={[st.prayerCard, { backgroundColor: C.amberBg, borderColor: C.amberBorder }]}>
@@ -170,7 +183,7 @@ export default function TodayScreen({ data, update, today, goTo }) {
           </Pressable>
         ))}
 
-        <View style={st.addBox}>
+        <View style={st.addBox} onLayout={(e) => (addY.current = e.nativeEvent.layout.y)}>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {Object.keys(TAGS).map((k) => (
               <Chip key={k} small label={k} active={tag === k} color={TAGS[k].fg} onPress={() => setTag(k)} />
@@ -185,6 +198,12 @@ export default function TodayScreen({ data, update, today, goTo }) {
               style={st.addInput}
               returnKeyType="done"
               onSubmitEditing={addTask}
+              submitBehavior="submit"
+              onFocus={() => {
+                typing.current = true;
+                showInput();
+              }}
+              onBlur={() => (typing.current = false)}
               accessibilityLabel="Nouvelle tâche"
             />
             <Pressable onPress={addTask} style={st.addBtn} accessibilityLabel="Ajouter la tâche">

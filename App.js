@@ -6,6 +6,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { C, TAB_COLORS } from './src/theme';
 import { todayKey } from './src/dates';
 import { useStore } from './src/store';
+import { useKeyboardOverlap } from './src/keyboard';
 import TodayScreen from './src/screens/TodayScreen';
 import ImportantScreen from './src/screens/ImportantScreen';
 import PlanningScreen from './src/screens/PlanningScreen';
@@ -23,6 +24,7 @@ function Main() {
   const { data, update, ready, refreshDay } = useStore();
   const [tab, setTab] = useState('today');
   const [today, setToday] = useState(todayKey());
+  const kb = useKeyboardOverlap();
 
   // Si l'application reste ouverte après minuit, on passe au nouveau jour
   useEffect(() => {
@@ -54,7 +56,7 @@ function Main() {
   const props = { data, update, today, goTo: setTab };
 
   return (
-    <View style={styles.root}>
+    <View ref={kb.ref} collapsable={false} style={[styles.root, { paddingBottom: kb.overlap }]}>
       <StatusBar style="light" />
       <View style={{ flex: 1 }}>
         {tab === 'today' && <TodayScreen {...props} />}
@@ -63,7 +65,8 @@ function Main() {
         {tab === 'prayers' && <PrayersScreen {...props} />}
       </View>
 
-      <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+      {/* La barre d'onglets se cache quand le clavier est ouvert, pour laisser la place au texte */}
+      <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 10) }, kb.overlap > 0 && { display: 'none' }]}>
         {TABS.map((t) => {
           const on = tab === t.id;
           const color = on ? TAB_COLORS[t.id] : C.muted;
