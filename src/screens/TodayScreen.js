@@ -9,6 +9,8 @@ import { useOnKeyboardShow } from '../keyboard';
 export default function TodayScreen({ data, update, today, goTo }) {
   const [text, setText] = useState('');
   const [tag, setTag] = useState('Perso');
+  const [showDone, setShowDone] = useState(false);
+  const [showPlannedDone, setShowPlannedDone] = useState(false);
   const scrollRef = useRef(null);
   const addY = useRef(0);
   const typing = useRef(false);
@@ -23,7 +25,9 @@ export default function TodayScreen({ data, update, today, goTo }) {
   useOnKeyboardShow(showInput);
 
   const tasks = data.daily[today] || [];
-  const done = tasks.filter((t) => t.done).length;
+  const todo = tasks.filter((t) => !t.done);
+  const finished = tasks.filter((t) => t.done);
+  const done = finished.length;
   const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
 
   const fajr = data.fajr[today];
@@ -32,6 +36,9 @@ export default function TodayScreen({ data, update, today, goTo }) {
   const planned = data.planned
     .filter((p) => occursOn(p, today))
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  const isPlannedDone = (p) => (p.doneDates || []).includes(today);
+  const plannedTodo = planned.filter((p) => !isPlannedDone(p));
+  const plannedDone = planned.filter(isPlannedDone);
 
   const addTask = () => {
     const title = text.trim();
@@ -96,10 +103,15 @@ export default function TodayScreen({ data, update, today, goTo }) {
         color={C.teal}
         light={C.tealLight}
         right={
-          <View style={st.pill}>
-            <Text style={st.pillText}>
-              {done}/{tasks.length} tâches
-            </Text>
+          <View style={{ alignItems: 'flex-end', gap: 10 }}>
+            <Pressable onPress={() => goTo('history')} style={st.histBtn} accessibilityLabel="Historique des tâches terminées">
+              <Ionicons name="time-outline" size={22} color={C.white} />
+            </Pressable>
+            <View style={st.pill}>
+              <Text style={st.pillText}>
+                {done}/{tasks.length} tâches
+              </Text>
+            </View>
           </View>
         }
       >
@@ -170,17 +182,12 @@ export default function TodayScreen({ data, update, today, goTo }) {
           </View>
         </View>
 
-        {/* Tâches du jour */}
+        {/* Tâches du jour : d'abord celles à faire */}
         <SectionTitle>Tâches du jour</SectionTitle>
         {tasks.length === 0 ? <Empty text="Aucune tâche pour aujourd'hui. Ajoute la première ci-dessous." /> : null}
-        {tasks.map((t) => (
-          <Pressable key={t.id} onLongPress={() => deleteTask(t)} style={st.taskRow}>
-            <Checkbox done={t.done} onPress={() => toggleTask(t.id)} color={C.teal} label={t.title} />
-            <Text style={[st.taskText, t.done && st.taskDone]}>{t.title}</Text>
-            <View style={[st.tag, { backgroundColor: (TAGS[t.tag] || TAGS.Perso).bg }]}>
-              <Text style={[st.tagText, { color: (TAGS[t.tag] || TAGS.Perso).fg }]}>{t.tag}</Text>
-            </View>
-          </Pressable>
+        {tasks.length > 0 && todo.length === 0 ? <Empty text="Bravo, tout est fait pour aujourd'hui !" /> : null}
+        {todo.map((t) => (
+          <TaskRow key={t.id} t={t} onToggle={() => toggleTask(t.id)} onLong={() => deleteTask(t)} />
         ))}
 
         <View style={st.addBox} onLayout={(e) => (addY.current = e.nativeEvent.layout.y)}>
@@ -211,6 +218,32 @@ export default function TodayScreen({ data, update, today, goTo }) {
             </Pressable>
           </View>
         </View>
+
+        {/* Tâches terminées : section repliée */}
+        {finished.length > 0 ? (
+          <View style={st.doneBox}>
+            <View style={st.doneHead}>
+              <Pressable
+                onPress={() => setShowDone(!showDone)}
+                style={st.doneToggle}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showDone }}
+              >
+                <Ionicons name={showDone ? 'chevron-down' : 'chevron-forward'} size={18} color={C.teal} />
+                <Text style={st.doneTitle}>Terminées ({finished.length})</Text>
+              </Pressable>
+              <Pressable onPress={() => goTo('history')} hitSlop={8} style={st.histLink}>
+                <Ionicons name="time-outline" size={16} color={C.teal} />
+                <Text style={st.histLinkText}>Historique</Text>
+              </Pressable>
+            </View>
+            {showDone
+              ? finished.map((t) => (
+                  <TaskRow key={t.id} t={t} onToggle={() => toggleTask(t.id)} onLong={() => deleteTask(t)} />
+                ))
+              : null}
+          </View>
+        ) : null}
         {tasks.length > 0 ? <Text style={st.hint}>Appui long sur une tâche pour la supprimer.</Text> : null}
 
         {/* Planifié aujourd'hui */}
@@ -223,28 +256,76 @@ export default function TodayScreen({ data, update, today, goTo }) {
         >
           Planifié aujourd'hui
         </SectionTitle>
-        {planned.length === 0 ? (
-          <Empty text="Rien de planifié aujourd'hui." />
-        ) : (
+        {planned.length === 0 ? <Empty text="Rien de planifié aujourd'hui." /> : null}
+        {planned.length > 0 && plannedTodo.length === 0 ? <Empty text="Tout ce qui était planifié est fait." /> : null}
+        {plannedTodo.length > 0 ? (
           <View style={st.plannedBox}>
-            {planned.map((p, i) => {
-              const isDone = (p.doneDates || []).includes(today);
-              return (
-                <View key={p.id} style={[st.plannedRow, i > 0 && { borderTopWidth: 1, borderTopColor: C.blueBorder }]}>
-                  <Checkbox done={isDone} onPress={() => togglePlanned(p.id)} color={C.blue} round label={p.title} />
-                  <Text style={st.plannedTime}>{p.time || 'Journée'}</Text>
-                  <Text style={[st.taskText, isDone && st.taskDone]}>{p.title}</Text>
-                </View>
-              );
-            })}
+            {plannedTodo.map((p, i) => (
+              <PlannedRow key={p.id} p={p} first={i === 0} done={false} onToggle={() => togglePlanned(p.id)} />
+            ))}
           </View>
-        )}
+        ) : null}
+        {plannedDone.length > 0 ? (
+          <View style={[st.doneBox, { borderColor: C.blueBorder }]}>
+            <Pressable
+              onPress={() => setShowPlannedDone(!showPlannedDone)}
+              style={st.doneToggle}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showPlannedDone }}
+            >
+              <Ionicons name={showPlannedDone ? 'chevron-down' : 'chevron-forward'} size={18} color={C.blue} />
+              <Text style={[st.doneTitle, { color: C.blue }]}>Terminées ({plannedDone.length})</Text>
+            </Pressable>
+            {showPlannedDone
+              ? plannedDone.map((p, i) => (
+                  <PlannedRow key={p.id} p={p} first={i === 0} done onToggle={() => togglePlanned(p.id)} />
+                ))
+              : null}
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
 }
 
+function TaskRow({ t, onToggle, onLong }) {
+  const tg = TAGS[t.tag] || TAGS.Perso;
+  return (
+    <Pressable onLongPress={onLong} style={st.taskRow}>
+      <Checkbox done={t.done} onPress={onToggle} color={C.teal} label={t.title} />
+      <Text style={[st.taskText, t.done && st.taskDone]}>{t.title}</Text>
+      <View style={[st.tag, { backgroundColor: tg.bg }]}>
+        <Text style={[st.tagText, { color: tg.fg }]}>{t.tag}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function PlannedRow({ p, first, done, onToggle }) {
+  return (
+    <View style={[st.plannedRow, !first && { borderTopWidth: 1, borderTopColor: C.blueBorder }]}>
+      <Checkbox done={done} onPress={onToggle} color={C.blue} round label={p.title} />
+      <Text style={st.plannedTime}>{p.time || 'Journée'}</Text>
+      <Text style={[st.taskText, done && st.taskDone]}>{p.title}</Text>
+    </View>
+  );
+}
+
 const st = StyleSheet.create({
+  histBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneBox: { backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: '#BFE3DE', padding: 6, gap: 6 },
+  doneHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 8 },
+  doneToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 8 },
+  doneTitle: { fontSize: 15, fontWeight: '700', color: C.teal },
+  histLink: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44 },
+  histLinkText: { color: C.teal, fontWeight: '700', fontSize: 13 },
   content: { padding: 20, gap: 14, paddingBottom: 40 },
   pill: { backgroundColor: C.yellow, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, marginBottom: 4 },
   pillText: { color: C.yellowInk, fontWeight: '800', fontSize: 13 },

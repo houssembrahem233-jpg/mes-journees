@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, AppState, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import TodayScreen from './src/screens/TodayScreen';
 import ImportantScreen from './src/screens/ImportantScreen';
 import PlanningScreen from './src/screens/PlanningScreen';
 import PrayersScreen from './src/screens/PrayersScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
 
 const TABS = [
   { id: 'today', label: "Aujourd'hui", icon: 'sunny' },
@@ -23,6 +24,8 @@ function Main() {
   const insets = useSafeAreaInsets();
   const { data, update, ready, refreshDay } = useStore();
   const [tab, setTab] = useState('today');
+  const [history, setHistory] = useState(false);
+  const closeHistory = useCallback(() => setHistory(false), []);
   const [today, setToday] = useState(todayKey());
   const kb = useKeyboardOverlap();
 
@@ -53,27 +56,40 @@ function Main() {
     );
   }
 
-  const props = { data, update, today, goTo: setTab };
+  const goTo = (id) => {
+    if (id === 'history') setHistory(true);
+    else {
+      setHistory(false);
+      setTab(id);
+    }
+  };
+  const props = { data, update, today, goTo };
 
   return (
     <View ref={kb.ref} collapsable={false} style={[styles.root, { paddingBottom: kb.overlap }]}>
       <StatusBar style="light" />
       <View style={{ flex: 1 }}>
-        {tab === 'today' && <TodayScreen {...props} />}
-        {tab === 'important' && <ImportantScreen {...props} />}
-        {tab === 'planning' && <PlanningScreen {...props} />}
-        {tab === 'prayers' && <PrayersScreen {...props} />}
+        {history ? (
+          <HistoryScreen data={data} today={today} onClose={closeHistory} />
+        ) : (
+          <>
+            {tab === 'today' && <TodayScreen {...props} />}
+            {tab === 'important' && <ImportantScreen {...props} />}
+            {tab === 'planning' && <PlanningScreen {...props} />}
+            {tab === 'prayers' && <PrayersScreen {...props} />}
+          </>
+        )}
       </View>
 
       {/* La barre d'onglets se cache quand le clavier est ouvert, pour laisser la place au texte */}
       <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 10) }, kb.overlap > 0 && { display: 'none' }]}>
         {TABS.map((t) => {
-          const on = tab === t.id;
+          const on = tab === t.id && !history;
           const color = on ? TAB_COLORS[t.id] : C.muted;
           return (
             <Pressable
               key={t.id}
-              onPress={() => setTab(t.id)}
+              onPress={() => goTo(t.id)}
               style={styles.tab}
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}

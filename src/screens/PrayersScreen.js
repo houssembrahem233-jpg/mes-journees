@@ -6,6 +6,7 @@ import { keyOf, parseKey, addDaysKey, daysInMonth, monthLabel, longLabel } from 
 import { Header, Sheet, PrimaryButton, Chip } from '../components';
 
 const WEEK = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const MISSED_BG = '#FDECEC';
 
 export default function PrayersScreen({ data, update, today }) {
   const t = parseKey(today);
@@ -16,7 +17,16 @@ export default function PrayersScreen({ data, update, today }) {
   const nbDays = daysInMonth(ym.y, ym.m);
   const offset = (new Date(ym.y, ym.m, 1).getDay() + 6) % 7;
   const keys = Array.from({ length: nbDays }, (_, i) => keyOf(new Date(ym.y, ym.m, i + 1)));
-  const past = keys.filter((k) => k <= today);
+  // Premier jour noté pour cette prière = début du suivi.
+  // À partir de ce jour, un jour passé non noté compte comme manqué.
+  // Aujourd'hui ne compte que s'il est déjà noté (on a encore le temps de le noter).
+  const record = vue === 'fajr' ? data.fajr : data.qiyam;
+  const noteDays = Object.keys(record).sort();
+  const start = noteDays.length ? noteDays[0] : null;
+  const counted = start
+    ? keys.filter((k) => k >= start && (k < today || (k === today && record[k] !== undefined)))
+    : [];
+  const isMissed = (k) => !!start && k >= start && k < today && record[k] === undefined;
 
   const moveMonth = (n) => {
     const d = new Date(ym.y, ym.m + n, 1);
@@ -26,8 +36,8 @@ export default function PrayersScreen({ data, update, today }) {
   // ---- Statistiques ----
   let stats;
   if (vue === 'fajr') {
-    const faits = past.filter((k) => data.fajr[k] === 'fait').length;
-    const pas = past.filter((k) => data.fajr[k] === 'pas').length;
+    const faits = counted.filter((k) => data.fajr[k] === 'fait').length;
+    const pas = counted.length - faits; // "pas fait" + jours non notés
     // Série : jours "fait" consécutifs jusqu'à aujourd'hui (ou hier si aujourd'hui pas encore noté)
     let serie = 0;
     let k = data.fajr[today] ? today : addDaysKey(today, -1);
@@ -37,17 +47,16 @@ export default function PrayersScreen({ data, update, today }) {
     }
     stats = [
       { label: 'Série', value: String(serie), unit: serie > 1 ? 'jours de suite' : 'jour de suite', color: C.teal },
-      { label: 'Ce mois', value: faits + '/' + (faits + pas), unit: 'jours faits', color: C.amber },
+      { label: 'Ce mois', value: faits + '/' + counted.length, unit: 'jours faits', color: C.amber },
       { label: 'Pas fait', value: String(pas), unit: pas > 1 ? 'jours' : 'jour', color: C.pasText },
     ];
   } else {
-    const noted = past.filter((k) => data.qiyam[k] !== undefined);
-    const total = noted.reduce((a, k) => a + data.qiyam[k], 0);
-    const nuits = noted.filter((k) => data.qiyam[k] > 0).length;
+    const total = counted.reduce((a, k) => a + (data.qiyam[k] || 0), 0);
+    const nuits = counted.filter((k) => data.qiyam[k] > 0).length;
     const moy = nuits ? (total / nuits).toFixed(1).replace('.', ',') : '0';
     stats = [
       { label: 'Total', value: String(total), unit: "rak'at", color: C.indigo },
-      { label: 'Nuits', value: nuits + '/' + noted.length, unit: 'nuits faites', color: C.amber },
+      { label: 'Nuits', value: nuits + '/' + counted.length, unit: 'nuits faites', color: C.amber },
       { label: 'Moyenne', value: moy, unit: "rak'at / nuit", color: '#7C3AED' },
     ];
   }
@@ -155,12 +164,16 @@ export default function PrayersScreen({ data, update, today }) {
                     bg = C.teal; fg = C.white; sub = '✓';
                   } else if (v === 'pas') {
                     bg = C.pasBg; fg = C.pasText; sub = '✕';
+                  } else if (isMissed(k)) {
+                    bg = MISSED_BG; fg = C.pasText; sub = '?';
                   } else {
                     bg = '#EEF1F4'; fg = C.ink;
                   }
                 } else {
                   const v = data.qiyam[k];
-                  if (v === undefined) {
+                  if (v === undefined && isMissed(k)) {
+                    bg = MISSED_BG; fg = C.pasText; sub = '?';
+                  } else if (v === undefined) {
                     bg = '#F4F5F8'; fg = C.ink;
                   } else {
                     const col = qiyamColors(v);
@@ -190,13 +203,14 @@ export default function PrayersScreen({ data, update, today }) {
               <>
                 <Legend color={C.teal} label="Fait" />
                 <Legend color={C.pasBg} border={C.pasBorder} label="Pas fait" />
-                <Legend color="#EEF1F4" label="Non noté" />
+                <Legend color={MISSED_BG} border="#F5B5B5" label="Non noté (compté manqué)" />
               </>
             ) : (
               <>
                 {[0, 2, 4, 6, 8].map((n) => (
                   <Legend key={n} color={qiyamColors(n).bg} label={n === 8 ? '8 et +' : String(n)} />
                 ))}
+                <Legend color={MISSED_BG} border="#F5B5B5" label="Non noté (compté manqué)" />
               </>
             )}
           </View>

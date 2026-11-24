@@ -44,7 +44,11 @@ export default function ImportantScreen({ data, update, today }) {
   const toggle = (id) =>
     update((d) => {
       const t = d.important.find((x) => x.id === id);
-      if (t) t.done = !t.done;
+      if (!t) return;
+      t.done = !t.done;
+      // On retient le jour où la tâche a été terminée (pour l'historique)
+      if (t.done) t.doneAt = today;
+      else delete t.doneAt;
     });
 
   const remove = (t) =>
